@@ -9,29 +9,20 @@ function patchFile(filePath, description) {
   let content = readFileSync(filePath, 'utf8');
   const original = content;
 
-  // Fix isWrappedId arrow function
+  // Only fix the specific isWrappedId function
   content = content.replace(
     'const isWrappedId = (id, suffix) => id.endsWith(suffix);',
     'const isWrappedId = (id, suffix) => typeof id === "string" && id.endsWith(suffix);'
   );
 
-  // Add a safe string check helper at the top if not already there
-  const helper = '\nfunction __safeStr(v){return typeof v==="string"?v:""}\n';
-  if (!content.includes('__safeStr')) {
-    content = helper + content;
-  }
-
-  // Replace method calls with safe version
+  // Only fix importee and source method calls (not generic id)
   content = content
-    .replace(/\bimportee\.startsWith\b/g, '__safeStr(importee).startsWith')
-    .replace(/\bimportee\.endsWith\b/g, '__safeStr(importee).endsWith')
-    .replace(/\bimportee\.includes\b/g, '__safeStr(importee).includes')
-    .replace(/\bsource\.startsWith\b/g, '__safeStr(source).startsWith')
-    .replace(/\bsource\.endsWith\b/g, '__safeStr(source).endsWith')
-    .replace(/\bsource\.includes\b/g, '__safeStr(source).includes')
-    .replace(/\bid\.startsWith\b/g, '__safeStr(id).startsWith')
-    .replace(/\bid\.endsWith\b/g, '__safeStr(id).endsWith')
-    .replace(/\bid\.includes\b/g, '__safeStr(id).includes');
+    .replace(/\bimportee\.startsWith\b/g, '(typeof importee==="string"?importee:"").startsWith')
+    .replace(/\bimportee\.endsWith\b/g, '(typeof importee==="string"?importee:"").endsWith')
+    .replace(/\bimportee\.includes\b/g, '(typeof importee==="string"?importee:"").includes')
+    .replace(/\bsource\.startsWith\b/g, '(typeof source==="string"?source:"").startsWith')
+    .replace(/\bsource\.endsWith\b/g, '(typeof source==="string"?source:"").endsWith')
+    .replace(/\bsource\.includes\b/g, '(typeof source==="string"?source:"").includes');
 
   if (content !== original) {
     writeFileSync(filePath, content);
