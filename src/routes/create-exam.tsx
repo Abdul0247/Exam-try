@@ -219,6 +219,45 @@ function CreateExamPage() {
             {saving ? "Saving…" : "Create Exam"}
           </Button>
         </div>
+
+        {createdRoster && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl">
+              <h3 className="text-lg font-semibold text-foreground">Exam created</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Access code: <strong className="font-mono text-foreground">{createdCode}</strong>.
+                Give each student their personal PIN below — without it they cannot start the exam.
+              </p>
+              <div className="mt-4 max-h-72 overflow-auto rounded-lg border border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted text-xs uppercase text-muted-foreground">
+                    <tr><th className="p-2 text-left">Name</th><th className="p-2 text-left">Number</th><th className="p-2 text-left">PIN</th></tr>
+                  </thead>
+                  <tbody>
+                    {createdRoster.map((r) => (
+                      <tr key={r.student_number} className="border-t border-border">
+                        <td className="p-2">{r.full_name}</td>
+                        <td className="p-2 font-mono">{r.student_number}</td>
+                        <td className="p-2 font-mono font-semibold">{r.pin}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const csv = "Name,Number,PIN\n" + createdRoster.map(r => `${r.full_name},${r.student_number},${r.pin}`).join("\n");
+                    navigator.clipboard.writeText(csv);
+                    toast.success("Copied PINs to clipboard");
+                  }}
+                >Copy PINs</Button>
+                <Button onClick={() => navigate({ to: "/dashboard" })}>Done</Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
