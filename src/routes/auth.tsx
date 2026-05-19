@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AppHeader } from "@/components/AppHeader";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Eye, EyeOff, Check, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({
@@ -18,17 +18,35 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+const rules = [
+  { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
+  { label: "One uppercase letter", test: (p: string) => /[A-Z]/.test(p) },
+  { label: "One lowercase letter", test: (p: string) => /[a-z]/.test(p) },
+  { label: "One number", test: (p: string) => /\d/.test(p) },
+  { label: "One special character", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+];
+
 function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [fullName, setFullName] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const passwordValid = mode === "signin" ? password.length > 0 : rules.every((r) => r.test(password));
+  const matches = password === confirm;
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === "signup") {
+      if (!passwordValid) return toast.error("Password does not meet all requirements");
+      if (!matches) return toast.error("Passwords do not match");
+    }
     setLoading(true);
     try {
       if (mode === "signup") {
@@ -90,9 +108,71 @@ function AuthPage() {
             </div>
             <div>
               <Label>Password</Label>
-              <Input className="mt-1" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+              <div className="relative mt-1">
+                <Input
+                  type={showPwd ? "text" : "password"}
+                  required
+                  minLength={mode === "signup" ? 8 : 1}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd((s) => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPwd ? "Hide password" : "Show password"}
+                >
+                  {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
-            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+
+            {mode === "signup" && (
+              <>
+                <ul className="space-y-1 rounded-lg bg-muted/40 p-3 text-xs">
+                  {rules.map((r) => {
+                    const ok = r.test(password);
+                    return (
+                      <li key={r.label} className={`flex items-center gap-2 ${ok ? "text-success" : "text-muted-foreground"}`}>
+                        {ok ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                        {r.label}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div>
+                  <Label>Confirm Password</Label>
+                  <div className="relative mt-1">
+                    <Input
+                      type={showConfirm ? "text" : "password"}
+                      required
+                      value={confirm}
+                      onChange={(e) => setConfirm(e.target.value)}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirm((s) => !s)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showConfirm ? "Hide password" : "Show password"}
+                    >
+                      {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {confirm.length > 0 && !matches && (
+                    <p className="mt-1 text-xs text-destructive">Passwords do not match</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={loading || (mode === "signup" && (!passwordValid || !matches))}
+            >
               {loading ? "Please wait…" : mode === "signin" ? "Sign In" : "Create Account"}
             </Button>
             <button
