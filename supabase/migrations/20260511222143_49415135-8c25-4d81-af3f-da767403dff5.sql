@@ -23,7 +23,7 @@ SELECT cron.schedule(
   $$
   SELECT public.auto_close_exams();
   SELECT net.http_post(
-    url := 'https://project--e3c982ee-ba97-4c19-8c52-8c6b24bd9628.lovable.app/api/public/hooks/exam-summary',
+    url := 'https://project--e3c982ee-ba97-4c19-8c52-8c6b24bd9628.smarthub.app/api/public/hooks/exam-summary',
     headers := jsonb_build_object(
       'Content-Type','application/json',
       'apikey','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3bWF0Z3drYnpua21ob3dianp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MjAwOTAsImV4cCI6MjA5MTk5NjA5MH0.Fz80s1moQ-8-5CoJpGq_131VC1y-o3pS7Cjx454O6ck'

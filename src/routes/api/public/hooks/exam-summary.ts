@@ -1,5 +1,5 @@
 // Cron-triggered: closes expired exams and emails teacher a summary CSV via Resend.
-// Called every 5 minutes from pg_cron. Uses anon apikey header (Lovable public route bypass).
+// Called every 5 minutes from pg_cron. Uses anon apikey header (Smarthub public route bypass).
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -8,9 +8,9 @@ export const Route = createFileRoute("/api/public/hooks/exam-summary")({
     handlers: {
       POST: async () => {
         const RESEND_API_KEY = process.env.RESEND_API_KEY;
-        const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
+        const SMARTHUB_API_KEY = process.env.SMARTHUB_API_KEY;
 
-        if (!RESEND_API_KEY || !LOVABLE_API_KEY) {
+        if (!RESEND_API_KEY || !SMARTHUB_API_KEY) {
           return new Response(JSON.stringify({ error: "Missing API keys" }), { status: 500 });
         }
 
@@ -86,11 +86,11 @@ export const Route = createFileRoute("/api/public/hooks/exam-summary")({
             <p style="color:#888;font-size:12px">${escapeHtml(profile?.school_name ?? "")}</p>
           `;
 
-          const r = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
+          const r = await fetch("https://connector-gateway.smarthub.dev/resend/emails", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              Authorization: `Bearer ${SMARTHUB_API_KEY}`,
               "X-Connection-Api-Key": RESEND_API_KEY,
             },
             body: JSON.stringify({
