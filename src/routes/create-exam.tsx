@@ -116,8 +116,9 @@ function CreateExamPage() {
           })),
         },
       });
+      setCreatedCode(result.access_code);
+      setCreatedRoster(result.roster ?? []);
       toast.success(`Exam created. Access code: ${result.access_code}`);
-      navigate({ to: "/dashboard" });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -189,12 +190,13 @@ function CreateExamPage() {
         <div className="mb-8 rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-2 text-lg font-semibold text-foreground">Student Roster</h2>
           <p className="mb-3 text-sm text-muted-foreground">
-            One per line: <code className="rounded bg-muted px-1">Full Name, Student Number</code>. Only listed students can take this exam.
+            One per line: <code className="rounded bg-muted px-1">Full Name, Student Number, PIN</code>.
+            The PIN is optional — if omitted, a 4-digit PIN is auto-generated. Share each student's PIN privately so codes can't be shared.
           </p>
           <Textarea
             rows={6}
             className="font-mono text-sm"
-            placeholder={"Adebayo Oluwaseun, SS2-001\nChioma Nwosu, SS2-002"}
+            placeholder={"Adebayo Oluwaseun, SS2-001, 4821\nChioma Nwosu, SS2-002"}
             value={rosterText}
             onChange={(e) => setRosterText(e.target.value)}
           />
