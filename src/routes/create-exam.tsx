@@ -64,6 +64,11 @@ function CreateExamPage() {
   ]);
   const [saving, setSaving] = useState(false);
 
+  const [createdRoster, setCreatedRoster] = useState<
+    Array<{ full_name: string; student_number: string; pin: string }> | null
+  >(null);
+  const [createdCode, setCreatedCode] = useState<string>("");
+
   const parseRoster = () =>
     rosterText
       .split(/\r?\n/)
@@ -71,7 +76,11 @@ function CreateExamPage() {
       .filter(Boolean)
       .map((line) => {
         const parts = line.split(",").map((p) => p.trim());
-        return { full_name: parts[0] || "", student_number: parts[1] || "" };
+        return {
+          full_name: parts[0] || "",
+          student_number: parts[1] || "",
+          pin: parts[2] || undefined,
+        };
       })
       .filter((r) => r.full_name && r.student_number);
 
