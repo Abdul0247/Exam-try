@@ -38,10 +38,18 @@ const CreateExamInput = z.object({
   closes_at: z.string().nullable().optional(),
   status: z.enum(["draft", "active"]).default("draft"),
   roster: z
-    .array(z.object({ full_name: z.string().min(1), student_number: z.string().min(1) }))
+    .array(z.object({
+      full_name: z.string().min(1),
+      student_number: z.string().min(1),
+      pin: z.string().min(4).max(8).optional(),
+    }))
     .default([]),
   questions: z.array(QuestionInput).min(1),
 });
+
+function genPin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
 
 export const createExam = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -103,17 +111,24 @@ export const createExam = createServerFn({ method: "POST" })
       if (oErr) throw new Error(oErr.message);
     }
 
+    let rosterWithPins: Array<{ full_name: string; student_number: string; pin: string }> = [];
     if (data.roster.length > 0) {
-      const rows = data.roster.map((r) => ({
+      rosterWithPins = data.roster.map((r) => ({
+        full_name: r.full_name,
+        student_number: r.student_number,
+        pin: (r.pin && r.pin.trim()) || genPin(),
+      }));
+      const rows = rosterWithPins.map((r) => ({
         exam_id: exam.id,
         full_name: r.full_name,
         student_number: r.student_number,
+        pin: r.pin,
       }));
       const { error: rErr } = await supabase.from("roster_students").insert(rows);
       if (rErr) throw new Error(rErr.message);
     }
 
-    return { id: exam.id, access_code: exam.access_code };
+    return { id: exam.id, access_code: exam.access_code, roster: rosterWithPins };
   });
 
 export const listExams = createServerFn({ method: "GET" })
@@ -189,12 +204,14 @@ export const studentStartExam = createServerFn({ method: "POST" })
       .object({
         access_code: z.string().min(1),
         student_number: z.string().min(1),
+        pin: z.string().min(1),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
     const code = data.access_code.trim().toUpperCase();
     const studentNum = data.student_number.trim();
+    const pin = data.pin.trim();
 
     const { data: exam } = await supabaseAdmin
       .from("exams")
@@ -219,6 +236,7 @@ export const studentStartExam = createServerFn({ method: "POST" })
       .eq("student_number", studentNum)
       .maybeSingle();
     if (!roster) throw new Error("Student number not found in roster");
+    if (roster.pin !== pin) throw new Error("Incorrect PIN. Ask your teacher for your personal PIN.");
 
     // Get or create submission
     let { data: submission } = await supabaseAdmin
