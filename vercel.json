@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npx vinxi build",
-  "outputDirectory": ".output/public",
+  "buildCommand": "bun run build",
+  "outputDirectory": "dist/client",
   "framework": null,
   "rewrites": [{ "source": "/(.*)", "destination": "/" }]
 }
