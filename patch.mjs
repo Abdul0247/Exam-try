@@ -21,6 +21,14 @@ function patchFile(filePath, description) {
     'function slash$1(p) {\n  if (typeof p !== "string") return p;\n  return p.replace(windowsSlashRE, "/");\n}'
   );
 
+  // Vite/Rollup sometimes forwards non-string entry ids through the resolver in this stack.
+  // Guard the exact bundled resolver branch that otherwise crashes production builds with
+  // `id.startsWith is not a function` before app code is compiled.
+  content = content.replace(
+    'async resolveId(id, importer, resolveOpts) {\n      if (id[0] === "\\0" || id.startsWith("virtual:") || // When injected directly in html/client code\n      id.startsWith("/virtual:")) {',
+    'async resolveId(id, importer, resolveOpts) {\n      if (typeof id !== "string") return;\n      if (id[0] === "\\0" || id.startsWith("virtual:") || // When injected directly in html/client code\n      id.startsWith("/virtual:")) {'
+  );
+
   // Only fix importee and source method calls (not generic id)
   content = content
     .replace(/\bimportee\.startsWith\b/g, '(typeof importee==="string"?importee:"").startsWith')
