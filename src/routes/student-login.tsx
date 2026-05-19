@@ -24,14 +24,16 @@ function StudentLoginPage() {
   const start = useServerFn(studentStartExam);
   const [accessCode, setAccessCode] = useState("");
   const [studentNumber, setStudentNumber] = useState("");
+  const [pin, setPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const handleStart = async () => {
-    if (!accessCode.trim() || !studentNumber.trim()) return;
+    if (!accessCode.trim() || !studentNumber.trim() || !pin.trim()) return;
     setBusy(true);
     try {
       const result = await start({
-        data: { access_code: accessCode, student_number: studentNumber },
+        data: { access_code: accessCode, student_number: studentNumber, pin },
       });
       navigate({ to: "/exam", search: { sid: result.submission_id } });
     } catch (e) {
@@ -52,7 +54,7 @@ function StudentLoginPage() {
             </div>
             <h1 className="text-2xl font-bold text-foreground">Start Your Exam</h1>
             <p className="mt-2 text-muted-foreground">
-              Enter the access code and your student number
+              Enter the access code, your student number and personal PIN
             </p>
           </div>
 
@@ -78,11 +80,33 @@ function StudentLoginPage() {
                   onChange={(e) => setStudentNumber(e.target.value)}
                 />
               </div>
+              <div>
+                <Label>Your Personal PIN</Label>
+                <div className="relative mt-1">
+                  <Input
+                    type={showPin ? "text" : "password"}
+                    inputMode="numeric"
+                    placeholder="****"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    maxLength={8}
+                    className="pr-16"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    {showPin ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Private to you — your teacher gave you this. Don't share it.</p>
+              </div>
               <Button
                 className="w-full"
                 size="lg"
                 onClick={handleStart}
-                disabled={busy || !accessCode.trim() || !studentNumber.trim()}
+                disabled={busy || !accessCode.trim() || !studentNumber.trim() || !pin.trim()}
               >
                 <LogIn className="h-5 w-5" />
                 {busy ? "Starting…" : "Start Exam"}
