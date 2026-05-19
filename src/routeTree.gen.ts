@@ -16,7 +16,6 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CreateExamRouteImport } from './routes/create-exam'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiPublicHooksExamSummaryRouteImport } from './routes/api/public/hooks/exam-summary'
 
 const StudentLoginRoute = StudentLoginRouteImport.update({
   id: '/student-login',
@@ -53,12 +52,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicHooksExamSummaryRoute =
-  ApiPublicHooksExamSummaryRouteImport.update({
-    id: '/api/public/hooks/exam-summary',
-    path: '/api/public/hooks/exam-summary',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,7 +61,6 @@ export interface FileRoutesByFullPath {
   '/exam': typeof ExamRoute
   '/exam-results': typeof ExamResultsRoute
   '/student-login': typeof StudentLoginRoute
-  '/api/public/hooks/exam-summary': typeof ApiPublicHooksExamSummaryRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,7 +70,6 @@ export interface FileRoutesByTo {
   '/exam': typeof ExamRoute
   '/exam-results': typeof ExamResultsRoute
   '/student-login': typeof StudentLoginRoute
-  '/api/public/hooks/exam-summary': typeof ApiPublicHooksExamSummaryRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,7 +80,6 @@ export interface FileRoutesById {
   '/exam': typeof ExamRoute
   '/exam-results': typeof ExamResultsRoute
   '/student-login': typeof StudentLoginRoute
-  '/api/public/hooks/exam-summary': typeof ApiPublicHooksExamSummaryRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,7 +91,6 @@ export interface FileRouteTypes {
     | '/exam'
     | '/exam-results'
     | '/student-login'
-    | '/api/public/hooks/exam-summary'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,7 +100,6 @@ export interface FileRouteTypes {
     | '/exam'
     | '/exam-results'
     | '/student-login'
-    | '/api/public/hooks/exam-summary'
   id:
     | '__root__'
     | '/'
@@ -121,7 +109,6 @@ export interface FileRouteTypes {
     | '/exam'
     | '/exam-results'
     | '/student-login'
-    | '/api/public/hooks/exam-summary'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,7 +119,6 @@ export interface RootRouteChildren {
   ExamRoute: typeof ExamRoute
   ExamResultsRoute: typeof ExamResultsRoute
   StudentLoginRoute: typeof StudentLoginRoute
-  ApiPublicHooksExamSummaryRoute: typeof ApiPublicHooksExamSummaryRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -186,13 +172,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/hooks/exam-summary': {
-      id: '/api/public/hooks/exam-summary'
-      path: '/api/public/hooks/exam-summary'
-      fullPath: '/api/public/hooks/exam-summary'
-      preLoaderRoute: typeof ApiPublicHooksExamSummaryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -204,7 +183,6 @@ const rootRouteChildren: RootRouteChildren = {
   ExamRoute: ExamRoute,
   ExamResultsRoute: ExamResultsRoute,
   StudentLoginRoute: StudentLoginRoute,
-  ApiPublicHooksExamSummaryRoute: ApiPublicHooksExamSummaryRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

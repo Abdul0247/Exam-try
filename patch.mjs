@@ -15,6 +15,12 @@ function patchFile(filePath, description) {
     'const isWrappedId = (id, suffix) => typeof id === "string" && id.endsWith(suffix);'
   );
 
+  // Make slash$1 tolerant of non-string input (vinxi's bundled vite)
+  content = content.replace(
+    'function slash$1(p) {\n  return p.replace(windowsSlashRE, "/");\n}',
+    'function slash$1(p) {\n  if (typeof p !== "string") return p;\n  return p.replace(windowsSlashRE, "/");\n}'
+  );
+
   // Only fix importee and source method calls (not generic id)
   content = content
     .replace(/\bimportee\.startsWith\b/g, '(typeof importee==="string"?importee:"").startsWith')
