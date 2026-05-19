@@ -211,6 +211,7 @@ export type Database = {
           exam_id: string
           full_name: string
           id: string
+          pin: string
           student_number: string
         }
         Insert: {
@@ -218,6 +219,7 @@ export type Database = {
           exam_id: string
           full_name: string
           id?: string
+          pin: string
           student_number: string
         }
         Update: {
@@ -225,6 +227,7 @@ export type Database = {
           exam_id?: string
           full_name?: string
           id?: string
+          pin?: string
           student_number?: string
         }
         Relationships: [
