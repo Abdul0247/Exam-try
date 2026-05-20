@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
+import { join } from 'path';
 
 function patchFile(filePath, description) {
   if (!existsSync(filePath)) {
@@ -52,10 +53,16 @@ function patchFile(filePath, description) {
   }
 }
 
-patchFile(
-  './node_modules/vinxi/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js',
-  'vinxi bundled vite'
-);
+const viteChunksDir = './node_modules/vinxi/node_modules/vite/dist/node/chunks';
+if (existsSync(viteChunksDir)) {
+  for (const fileName of readdirSync(viteChunksDir)) {
+    if (fileName.startsWith('dep-') && fileName.endsWith('.js')) {
+      patchFile(join(viteChunksDir, fileName), `vinxi bundled vite ${fileName}`);
+    }
+  }
+} else {
+  console.log('Skipping vinxi bundled vite - chunks directory not found');
+}
 
 patchFile(
   './node_modules/@tanstack/start-plugin-core/dist/esm/import-protection-plugin/virtualModules.js',
