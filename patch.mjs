@@ -21,6 +21,12 @@ function patchFile(filePath, description) {
     'function slash$1(p) {\n  if (typeof p !== "string") return p;\n  return p.replace(windowsSlashRE, "/");\n}'
   );
 
+  // Make cleanUrl tolerant of non-string ids that are forwarded by the resolver.
+  content = content.replace(
+    'function cleanUrl(url) {\n  return url.replace(postfixRE, "");\n}',
+    'function cleanUrl(url) {\n  if (typeof url !== "string") return "";\n  return url.replace(postfixRE, "");\n}'
+  );
+
   // Vite/Rollup sometimes forwards non-string entry ids through the resolver in this stack.
   // Guard the exact bundled resolver branch that otherwise crashes production builds with
   // `id.startsWith is not a function` before app code is compiled.
