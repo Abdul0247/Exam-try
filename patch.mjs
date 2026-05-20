@@ -28,6 +28,18 @@ function patchFile(filePath, description) {
     'function cleanUrl(url) {\n  if (typeof url !== "string") return "";\n  return url.replace(postfixRE, "");\n}'
   );
 
+  // If cleanUrl is already patched, keep splitFileAndPostfix from slicing non-strings.
+  content = content.replace(
+    'function splitFileAndPostfix(path) {\n  const file = cleanUrl(path);\n  return { file, postfix: path.slice(file.length) };\n}',
+    'function splitFileAndPostfix(path) {\n  if (typeof path !== "string") return { file: "", postfix: "" };\n  const file = cleanUrl(path);\n  return { file, postfix: path.slice(file.length) };\n}'
+  );
+
+  // Asset resolver receives Rollup ids before every plugin normalizes them.
+  content = content.replace(
+    'handler(id) {\n        if (!config.assetsInclude(cleanUrl(id)) && !urlRE$1.test(id)) {',
+    'handler(id) {\n        if (typeof id !== "string") return;\n        if (!config.assetsInclude(cleanUrl(id)) && !urlRE$1.test(id)) {'
+  );
+
   // Vite/Rollup sometimes forwards non-string entry ids through the resolver in this stack.
   // Guard the exact bundled resolver branch that otherwise crashes production builds with
   // `id.startsWith is not a function` before app code is compiled.
