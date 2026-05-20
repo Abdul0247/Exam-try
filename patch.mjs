@@ -40,6 +40,12 @@ function patchFile(filePath, description) {
     'handler(id) {\n        if (typeof id !== "string") return;\n        if (!config.assetsInclude(cleanUrl(id)) && !urlRE$1.test(id)) {'
   );
 
+  // Data URI resolver also receives Rollup ids before every plugin normalizes them.
+  content = content.replace(
+    'resolveId(id) {\n      if (!id.trimStart().startsWith("data:")) {',
+    'resolveId(id) {\n      if (typeof id !== "string") return;\n      if (!id.trimStart().startsWith("data:")) {'
+  );
+
   // Vite/Rollup sometimes forwards non-string entry ids through the resolver in this stack.
   // Guard the exact bundled resolver branch that otherwise crashes production builds with
   // `id.startsWith is not a function` before app code is compiled.
