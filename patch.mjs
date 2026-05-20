@@ -65,16 +65,22 @@ function patchFile(filePath, description) {
   }
 }
 
-const viteChunksDir = './node_modules/vinxi/node_modules/vite/dist/node/chunks';
-if (existsSync(viteChunksDir)) {
-  for (const fileName of readdirSync(viteChunksDir)) {
-    if (fileName.startsWith('dep-') && fileName.endsWith('.js')) {
-      patchFile(join(viteChunksDir, fileName), `vinxi bundled vite ${fileName}`);
+function patchViteChunks(viteChunksDir, description) {
+  if (existsSync(viteChunksDir)) {
+    for (const fileName of readdirSync(viteChunksDir)) {
+      if (fileName.endsWith('.js')) {
+        patchFile(join(viteChunksDir, fileName), `${description} ${fileName}`);
+      }
     }
+  } else {
+    console.log(`Skipping ${description} - chunks directory not found`);
   }
-} else {
-  console.log('Skipping vinxi bundled vite - chunks directory not found');
 }
+
+patchViteChunks('./node_modules/vinxi/node_modules/vite/dist/node/chunks', 'vinxi bundled vite');
+patchViteChunks('./node_modules/vite/dist/node/chunks', 'root vite');
+
+patchFile('./node_modules/vite/dist/node/module-runner.js', 'root vite module runner');
 
 patchFile(
   './node_modules/@tanstack/start-plugin-core/dist/esm/import-protection-plugin/virtualModules.js',
