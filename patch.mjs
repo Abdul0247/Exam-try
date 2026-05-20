@@ -63,6 +63,20 @@ function patchFile(filePath, description) {
     .replace(/\bsource\.endsWith\b/g, '(typeof source==="string"?source:"").endsWith')
     .replace(/\bsource\.includes\b/g, '(typeof source==="string"?source:"").includes');
 
+  // Guard commonjs plugin resolveId against non-string importees, which
+  // otherwise bubble down to rollup's path.resolve and crash the build with
+  // 'paths[0] argument must be of type string'.
+  content = content.replace(
+    'async resolveId(importee, importer, resolveOptions) {\n      const customOptions = resolveOptions.custom;',
+    'async resolveId(importee, importer, resolveOptions) {\n      if (typeof importee !== "string") return null;\n      const customOptions = resolveOptions.custom;'
+  );
+
+  // Guard resolveExtensions which dereferences importee[0] assuming string.
+  content = content.replace(
+    'function resolveExtensions(importee, importer, extensions) {\n  // not our problem\n  if (importee[0] !== \'.\' || !importer) return undefined;',
+    'function resolveExtensions(importee, importer, extensions) {\n  // not our problem\n  if (typeof importee !== "string") return undefined;\n  if (importee[0] !== \'.\' || !importer) return undefined;'
+  );
+
   if (content !== original) {
     writeFileSync(filePath, content);
     console.log(`Patched: ${description}`);
