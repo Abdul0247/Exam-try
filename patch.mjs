@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
+import { join } from 'path';
 
 function patchFile(filePath, description) {
   if (!existsSync(filePath)) {
@@ -27,6 +28,18 @@ function patchFile(filePath, description) {
     'function cleanUrl(url) {\n  if (typeof url !== "string") return "";\n  return url.replace(postfixRE, "");\n}'
   );
 
+  // If cleanUrl is already patched, keep splitFileAndPostfix from slicing non-strings.
+  content = content.replace(
+    'function splitFileAndPostfix(path) {\n  const file = cleanUrl(path);\n  return { file, postfix: path.slice(file.length) };\n}',
+    'function splitFileAndPostfix(path) {\n  if (typeof path !== "string") return { file: "", postfix: "" };\n  const file = cleanUrl(path);\n  return { file, postfix: path.slice(file.length) };\n}'
+  );
+
+  // Asset resolver receives Rollup ids before every plugin normalizes them.
+  content = content.replace(
+    'handler(id) {\n        if (!config.assetsInclude(cleanUrl(id)) && !urlRE$1.test(id)) {',
+    'handler(id) {\n        if (typeof id !== "string") return;\n        if (!config.assetsInclude(cleanUrl(id)) && !urlRE$1.test(id)) {'
+  );
+
   // Vite/Rollup sometimes forwards non-string entry ids through the resolver in this stack.
   // Guard the exact bundled resolver branch that otherwise crashes production builds with
   // `id.startsWith is not a function` before app code is compiled.
@@ -52,10 +65,16 @@ function patchFile(filePath, description) {
   }
 }
 
-patchFile(
-  './node_modules/vinxi/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js',
-  'vinxi bundled vite'
-);
+const viteChunksDir = './node_modules/vinxi/node_modules/vite/dist/node/chunks';
+if (existsSync(viteChunksDir)) {
+  for (const fileName of readdirSync(viteChunksDir)) {
+    if (fileName.startsWith('dep-') && fileName.endsWith('.js')) {
+      patchFile(join(viteChunksDir, fileName), `vinxi bundled vite ${fileName}`);
+    }
+  }
+} else {
+  console.log('Skipping vinxi bundled vite - chunks directory not found');
+}
 
 patchFile(
   './node_modules/@tanstack/start-plugin-core/dist/esm/import-protection-plugin/virtualModules.js',
