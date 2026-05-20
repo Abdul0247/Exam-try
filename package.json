@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vinxi dev",
-    "build": "vinxi build",
+    "build": "node patch.mjs && vinxi build",
     "preview": "vinxi start",
     "lint": "eslint .",
     "postinstall": "node patch.mjs"
