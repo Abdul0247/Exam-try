@@ -68,7 +68,7 @@ function patchFile(filePath, description) {
 function patchViteChunks(viteChunksDir, description) {
   if (existsSync(viteChunksDir)) {
     for (const fileName of readdirSync(viteChunksDir)) {
-      if (fileName.startsWith('dep-') && fileName.endsWith('.js')) {
+      if (fileName.endsWith('.js')) {
         patchFile(join(viteChunksDir, fileName), `${description} ${fileName}`);
       }
     }
@@ -79,6 +79,8 @@ function patchViteChunks(viteChunksDir, description) {
 
 patchViteChunks('./node_modules/vinxi/node_modules/vite/dist/node/chunks', 'vinxi bundled vite');
 patchViteChunks('./node_modules/vite/dist/node/chunks', 'root vite');
+
+patchFile('./node_modules/vite/dist/node/module-runner.js', 'root vite module runner');
 
 patchFile(
   './node_modules/@tanstack/start-plugin-core/dist/esm/import-protection-plugin/virtualModules.js',
