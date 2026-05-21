@@ -11,11 +11,7 @@ export default defineConfig({
     },
   },
   plugins: [
-    ...tanstackStart({
-      router: {
-        autoCodeSplitting: false,
-      },
-    }),
+    ...tanstackStart(),
     react(),
     tailwindcss(),
     tsconfigPaths(),
