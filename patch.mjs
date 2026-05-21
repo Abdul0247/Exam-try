@@ -18,16 +18,24 @@ const previousAfter = `url.searchParams.delete("v");
 					if (!normalizedId.includes("?tsr-split=") && !normalizedId.includes("&tsr-split=")) return null;
 					return handleCompilingVirtualFile(code, normalizedId);`
 
+const filterBefore = `filter: { id: /tsr-split/ }`
+const filterAfter = `filter: { id: /src\\/routes\\/.*tsr-split/ }`
+const handlerBefore = `handler(code, id) {
+					const url = pathToFileURL(id);`
+const handlerAfter = `handler(code, id) {
+					if (!id.includes('/src/routes/') && !id.includes('\\\\src\\\\routes\\\\')) return null;
+					const url = pathToFileURL(id);`
+
 for (const file of files) {
   if (!existsSync(file)) continue
-  const source = readFileSync(file, 'utf8')
-  if (source.includes(after)) continue
-  if (source.includes(previousAfter)) {
-    writeFileSync(file, source.replace(previousAfter, after))
-    console.log(`Updated ${file}`)
-    continue
+  let source = readFileSync(file, 'utf8')
+  const original = source
+  source = source.replace(filterBefore, filterAfter)
+  source = source.replace(handlerBefore, handlerAfter)
+  source = source.replace(previousAfter, before)
+  source = source.replace(after, before)
+  if (source !== original) {
+    writeFileSync(file, source)
+    console.log(`Patched ${file}`)
   }
-  if (!source.includes(before)) continue
-  writeFileSync(file, source.replace(before, after))
-  console.log(`Patched ${file}`)
 }
