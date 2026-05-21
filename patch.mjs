@@ -10,7 +10,7 @@ const before = `url.searchParams.delete("v");
 
 const after = `url.searchParams.delete("v");
 					const normalizedId = normalizePath(fileURLToPath(url));
-					if (!normalizedId.includes("?tsr-split=") && !normalizedId.includes("&tsr-split=")) return null;
+					if (!normalizedId.includes("?tsr-split=") && !normalizedId.includes("&tsr-split=")) return { code, map: null };
 					return handleCompilingVirtualFile(code, normalizedId);`
 
 for (const file of files) {
