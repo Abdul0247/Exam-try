@@ -20,12 +20,18 @@ const previousAfter = `url.searchParams.delete("v");
 
 const filterBefore = `filter: { id: /tsr-split/ }`
 const filterAfter = `filter: { id: /src\\/routes\\/.*tsr-split/ }`
+const handlerBefore = `handler(code, id) {
+					const url = pathToFileURL(id);`
+const handlerAfter = `handler(code, id) {
+					if (!id.includes('/src/routes/') && !id.includes('\\\\src\\\\routes\\\\')) return null;
+					const url = pathToFileURL(id);`
 
 for (const file of files) {
   if (!existsSync(file)) continue
   let source = readFileSync(file, 'utf8')
   const original = source
   source = source.replace(filterBefore, filterAfter)
+  source = source.replace(handlerBefore, handlerAfter)
   source = source.replace(previousAfter, before)
   source = source.replace(after, before)
   if (source !== original) {
