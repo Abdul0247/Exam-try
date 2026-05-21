@@ -1,115 +1,33 @@
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
-function patchFile(filePath, description) {
-  if (!existsSync(filePath)) {
-    console.log(`Skipping ${description} - not found`);
-    return;
+const files = [
+  'node_modules/@tanstack/router-plugin/dist/esm/core/router-code-splitter-plugin.js',
+  'node_modules/@tanstack/start-plugin-core/node_modules/@tanstack/router-plugin/dist/esm/core/router-code-splitter-plugin.js',
+]
+
+const before = `url.searchParams.delete("v");
+					return handleCompilingVirtualFile(code, normalizePath(fileURLToPath(url)));`
+
+const after = `url.searchParams.delete("v");
+					const normalizedId = normalizePath(fileURLToPath(url));
+					if (!normalizedId.includes("?tsr-split=") && !normalizedId.includes("&tsr-split=")) return { code, map: null };
+					return handleCompilingVirtualFile(code, normalizedId);`
+
+const previousAfter = `url.searchParams.delete("v");
+					const normalizedId = normalizePath(fileURLToPath(url));
+					if (!normalizedId.includes("?tsr-split=") && !normalizedId.includes("&tsr-split=")) return null;
+					return handleCompilingVirtualFile(code, normalizedId);`
+
+for (const file of files) {
+  if (!existsSync(file)) continue
+  const source = readFileSync(file, 'utf8')
+  if (source.includes(after)) continue
+  if (source.includes(previousAfter)) {
+    writeFileSync(file, source.replace(previousAfter, after))
+    console.log(`Updated ${file}`)
+    continue
   }
-
-  let content = readFileSync(filePath, 'utf8');
-  const original = content;
-
-  // Only fix the specific isWrappedId function
-  content = content.replace(
-    'const isWrappedId = (id, suffix) => id.endsWith(suffix);',
-    'const isWrappedId = (id, suffix) => typeof id === "string" && id.endsWith(suffix);'
-  );
-
-  // Make slash$1 tolerant of non-string input (vinxi's bundled vite)
-  content = content.replace(
-    'function slash$1(p) {\n  return p.replace(windowsSlashRE, "/");\n}',
-    'function slash$1(p) {\n  if (typeof p !== "string") return p;\n  return p.replace(windowsSlashRE, "/");\n}'
-  );
-
-  // Make cleanUrl tolerant of non-string ids that are forwarded by the resolver.
-  content = content.replace(
-    'function cleanUrl(url) {\n  return url.replace(postfixRE, "");\n}',
-    'function cleanUrl(url) {\n  if (typeof url !== "string") return "";\n  return url.replace(postfixRE, "");\n}'
-  );
-
-  // If cleanUrl is already patched, keep splitFileAndPostfix from slicing non-strings.
-  content = content.replace(
-    'function splitFileAndPostfix(path) {\n  const file = cleanUrl(path);\n  return { file, postfix: path.slice(file.length) };\n}',
-    'function splitFileAndPostfix(path) {\n  if (typeof path !== "string") return { file: "", postfix: "" };\n  const file = cleanUrl(path);\n  return { file, postfix: path.slice(file.length) };\n}'
-  );
-
-  // Asset resolver receives Rollup ids before every plugin normalizes them.
-  content = content.replace(
-    'handler(id) {\n        if (!config.assetsInclude(cleanUrl(id)) && !urlRE$1.test(id)) {',
-    'handler(id) {\n        if (typeof id !== "string") return;\n        if (!config.assetsInclude(cleanUrl(id)) && !urlRE$1.test(id)) {'
-  );
-
-  // Data URI resolver also receives Rollup ids before every plugin normalizes them.
-  content = content.replace(
-    'resolveId(id) {\n      if (!id.trimStart().startsWith("data:")) {',
-    'resolveId(id) {\n      if (typeof id !== "string") return;\n      if (!id.trimStart().startsWith("data:")) {'
-  );
-
-  // Vite/Rollup sometimes forwards non-string entry ids through the resolver in this stack.
-  // Guard the exact bundled resolver branch that otherwise crashes production builds with
-  // `id.startsWith is not a function` before app code is compiled.
-  content = content.replace(
-    'async resolveId(id, importer, resolveOpts) {\n      if (id[0] === "\\0" || id.startsWith("virtual:") || // When injected directly in html/client code\n      id.startsWith("/virtual:")) {',
-    'async resolveId(id, importer, resolveOpts) {\n      if (typeof id !== "string") return;\n      if (id[0] === "\\0" || id.startsWith("virtual:") || // When injected directly in html/client code\n      id.startsWith("/virtual:")) {'
-  );
-
-  // Only fix importee and source method calls (not generic id)
-  content = content
-    .replace(/\bimportee\.startsWith\b/g, '(typeof importee==="string"?importee:"").startsWith')
-    .replace(/\bimportee\.endsWith\b/g, '(typeof importee==="string"?importee:"").endsWith')
-    .replace(/\bimportee\.includes\b/g, '(typeof importee==="string"?importee:"").includes')
-    .replace(/\bsource\.startsWith\b/g, '(typeof source==="string"?source:"").startsWith')
-    .replace(/\bsource\.endsWith\b/g, '(typeof source==="string"?source:"").endsWith')
-    .replace(/\bsource\.includes\b/g, '(typeof source==="string"?source:"").includes');
-
-  // Guard commonjs plugin resolveId against non-string importees, which
-  // otherwise bubble down to rollup's path.resolve and crash the build with
-  // 'paths[0] argument must be of type string'.
-  content = content.replace(
-    'async resolveId(importee, importer, resolveOptions) {\n      const customOptions = resolveOptions.custom;',
-    'async resolveId(importee, importer, resolveOptions) {\n      if (typeof importee !== "string") return null;\n      const customOptions = resolveOptions.custom;'
-  );
-
-  // Guard resolveExtensions which dereferences importee[0] assuming string.
-  content = content.replace(
-    'function resolveExtensions(importee, importer, extensions) {\n  // not our problem\n  if (importee[0] !== \'.\' || !importer) return undefined;',
-    'function resolveExtensions(importee, importer, extensions) {\n  // not our problem\n  if (typeof importee !== "string") return undefined;\n  if (importee[0] !== \'.\' || !importer) return undefined;'
-  );
-
-  if (content !== original) {
-    writeFileSync(filePath, content);
-    console.log(`Patched: ${description}`);
-  } else {
-    console.log(`No changes: ${description}`);
-  }
+  if (!source.includes(before)) continue
+  writeFileSync(file, source.replace(before, after))
+  console.log(`Patched ${file}`)
 }
-
-function patchViteChunks(viteChunksDir, description) {
-  if (existsSync(viteChunksDir)) {
-    for (const fileName of readdirSync(viteChunksDir)) {
-      if (fileName.endsWith('.js')) {
-        patchFile(join(viteChunksDir, fileName), `${description} ${fileName}`);
-      }
-    }
-  } else {
-    console.log(`Skipping ${description} - chunks directory not found`);
-  }
-}
-
-patchViteChunks('./node_modules/vinxi/node_modules/vite/dist/node/chunks', 'vinxi bundled vite');
-patchViteChunks('./node_modules/vite/dist/node/chunks', 'root vite');
-
-patchFile('./node_modules/vite/dist/node/module-runner.js', 'root vite module runner');
-
-patchFile(
-  './node_modules/@tanstack/start-plugin-core/dist/esm/import-protection-plugin/virtualModules.js',
-  'tanstack virtualModules'
-);
-
-patchFile(
-  './node_modules/@tanstack/start-plugin-core/dist/esm/import-protection-plugin/plugin.js',
-  'tanstack plugin'
-);
-
-console.log('All patches applied.');
