@@ -26,6 +26,13 @@ const handlerAfter = `handler(code, id) {
 					if (!id.includes('/src/routes/') && !id.includes('\\\\src\\\\routes\\\\')) return null;
 					const url = pathToFileURL(id);`
 
+const viteJsonFile = 'node_modules/vite/dist/node/chunks/config.js'
+const jsonBefore = `handler(json, id) {
+				if (inlineRE$3.test(id) || noInlineRE.test(id))`
+const jsonAfter = `handler(json, id) {
+				if (!/\\.json(?:$|\\?)/.test(id)) return null;
+				if (inlineRE$3.test(id) || noInlineRE.test(id))`
+
 for (const file of files) {
   if (!existsSync(file)) continue
   let source = readFileSync(file, 'utf8')
@@ -37,5 +44,13 @@ for (const file of files) {
   if (source !== original) {
     writeFileSync(file, source)
     console.log(`Patched ${file}`)
+  }
+}
+
+if (existsSync(viteJsonFile)) {
+  const source = readFileSync(viteJsonFile, 'utf8')
+  if (!source.includes(jsonAfter) && source.includes(jsonBefore)) {
+    writeFileSync(viteJsonFile, source.replace(jsonBefore, jsonAfter))
+    console.log(`Patched ${viteJsonFile}`)
   }
 }
