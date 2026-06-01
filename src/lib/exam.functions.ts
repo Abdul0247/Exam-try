@@ -2,7 +2,7 @@
 // Student fns use the admin client because students don't sign in to Supabase.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual, randomInt } from "crypto";
 import bcrypt from "bcryptjs";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -10,9 +10,10 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 function genCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
-  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 6; i++) s += chars[randomInt(0, chars.length)];
   return s;
 }
+
 
 // ---- HMAC-signed short-lived session token bound to submission_id ----
 const SESSION_TTL_MS = 6 * 3600_000;
