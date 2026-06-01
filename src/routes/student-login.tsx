@@ -35,6 +35,7 @@ function StudentLoginPage() {
       const result = await start({
         data: { access_code: accessCode, student_number: studentNumber, pin },
       });
+      sessionStorage.setItem(`exam-token-${result.submission_id}`, result.session_token);
       navigate({ to: "/exam", search: { sid: result.submission_id } });
     } catch (e) {
       toast.error((e as Error).message);

@@ -2,6 +2,8 @@
 // Student fns use the admin client because students don't sign in to Supabase.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { createHmac, timingSafeEqual } from "crypto";
+import bcrypt from "bcryptjs";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -10,6 +12,44 @@ function genCode() {
   let s = "";
   for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
   return s;
+}
+
+// ---- HMAC-signed short-lived session token bound to submission_id ----
+const SESSION_TTL_MS = 6 * 3600_000;
+function sessionSecret(): string {
+  const s = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!s) throw new Error("Server misconfigured: missing signing secret");
+  return s;
+}
+function signSession(submissionId: string): string {
+  const exp = Date.now() + SESSION_TTL_MS;
+  const payload = `${submissionId}.${exp}`;
+  const sig = createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
+}
+function verifySession(token: string | undefined, submissionId: string): boolean {
+  if (!token) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  const [sid, expStr, sig] = parts;
+  if (sid !== submissionId) return false;
+  const exp = Number(expStr);
+  if (!Number.isFinite(exp) || Date.now() > exp) return false;
+  const expected = createHmac("sha256", sessionSecret()).update(`${sid}.${expStr}`).digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function hashPin(pin: string): Promise<string> {
+  return bcrypt.hash(pin, 10);
+}
+async function verifyPin(plain: string, stored: string): Promise<boolean> {
+  if (stored.startsWith("$2")) return bcrypt.compare(plain, stored);
+  // Legacy plaintext (pre-hashing). Constant-time compare.
+  const a = Buffer.from(plain);
+  const b = Buffer.from(stored);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // ============ TEACHER ============
@@ -118,12 +158,14 @@ export const createExam = createServerFn({ method: "POST" })
         student_number: r.student_number,
         pin: (r.pin && r.pin.trim()) || genPin(),
       }));
-      const rows = rosterWithPins.map((r) => ({
-        exam_id: exam.id,
-        full_name: r.full_name,
-        student_number: r.student_number,
-        pin: r.pin,
-      }));
+      const rows = await Promise.all(
+        rosterWithPins.map(async (r) => ({
+          exam_id: exam.id,
+          full_name: r.full_name,
+          student_number: r.student_number,
+          pin: await hashPin(r.pin),
+        })),
+      );
       const { error: rErr } = await supabase.from("roster_students").insert(rows);
       if (rErr) throw new Error(rErr.message);
     }
@@ -236,7 +278,14 @@ export const studentStartExam = createServerFn({ method: "POST" })
       .eq("student_number", studentNum)
       .maybeSingle();
     if (!roster) throw new Error("Student number not found in roster");
-    if (roster.pin !== pin) throw new Error("Incorrect PIN. Ask your teacher for your personal PIN.");
+    const pinOk = await verifyPin(pin, roster.pin);
+    if (!pinOk) throw new Error("Incorrect PIN. Ask your teacher for your personal PIN.");
+
+    // Opportunistically upgrade legacy plaintext PIN to bcrypt hash
+    if (!roster.pin.startsWith("$2")) {
+      const hashed = await hashPin(pin);
+      await supabaseAdmin.from("roster_students").update({ pin: hashed }).eq("id", roster.id);
+    }
 
     // Get or create submission
     let { data: submission } = await supabaseAdmin
@@ -265,12 +314,18 @@ export const studentStartExam = createServerFn({ method: "POST" })
       submission = created;
     }
 
-    return { submission_id: submission!.id, exam_id: exam.id, exam_title: exam.title };
+    const token = signSession(submission!.id);
+    return { submission_id: submission!.id, session_token: token, exam_id: exam.id, exam_title: exam.title };
   });
 
 export const studentGetExam = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => z.object({ submission_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: unknown) =>
+    z.object({ submission_id: z.string().uuid(), session_token: z.string().min(1) }).parse(d),
+  )
   .handler(async ({ data }) => {
+    if (!verifySession(data.session_token, data.submission_id)) {
+      throw new Error("Session expired. Please sign in again.");
+    }
     const { data: sub } = await supabaseAdmin
       .from("submissions")
       .select("*")
@@ -348,16 +403,21 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     z
       .object({
         submission_id: z.string().uuid(),
+        session_token: z.string().min(1),
         answers: z.array(
           z.object({
             question_id: z.string().uuid(),
             selected_option_id: z.string().uuid().nullable(),
           }),
-        ),
+        ).max(1000),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    if (!verifySession(data.session_token, data.submission_id)) {
+      throw new Error("Session expired. Please sign in again.");
+    }
+
     const { data: sub } = await supabaseAdmin
       .from("submissions")
       .select("*")
@@ -366,7 +426,25 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     if (!sub) throw new Error("Submission not found");
     if (sub.submitted_at) throw new Error("Already submitted");
 
-    // Load all questions+correct options for this exam (server-side only)
+    // Enforce exam status, window, and per-student time limit
+    const { data: exam } = await supabaseAdmin
+      .from("exams")
+      .select("status, closes_at, duration_minutes")
+      .eq("id", sub.exam_id)
+      .single();
+    if (!exam) throw new Error("Exam not found");
+    if (exam.status !== "active") throw new Error("Exam is no longer active");
+    const now = Date.now();
+    if (exam.closes_at && new Date(exam.closes_at).getTime() < now) {
+      throw new Error("Exam window has closed");
+    }
+    const startedMs = new Date(sub.started_at).getTime();
+    // Allow a 30s grace for clock skew / submission latency
+    if (now > startedMs + exam.duration_minutes * 60_000 + 30_000) {
+      throw new Error("Your time for this exam has expired");
+    }
+
+    // Load all questions+options for this exam (server-side only)
     const { data: questions } = await supabaseAdmin
       .from("questions")
       .select("id, options(id, is_correct)")
@@ -374,9 +452,13 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     const totalQ = questions?.length ?? 0;
 
     const correctMap = new Map<string, Set<string>>();
+    const optionToQuestion = new Map<string, string>();
     for (const q of questions ?? []) {
       const set = new Set<string>();
-      for (const o of q.options ?? []) if (o.is_correct) set.add(o.id);
+      for (const o of q.options ?? []) {
+        optionToQuestion.set(o.id, q.id);
+        if (o.is_correct) set.add(o.id);
+      }
       correctMap.set(q.id, set);
     }
 
@@ -389,15 +471,22 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     }> = [];
     const seen = new Set<string>();
     for (const a of data.answers) {
+      // Reject answers for questions not in this exam (cross-exam injection)
+      if (!correctMap.has(a.question_id)) continue;
       if (seen.has(a.question_id)) continue;
       seen.add(a.question_id);
-      const correctSet = correctMap.get(a.question_id);
-      const isCorrect = !!(a.selected_option_id && correctSet?.has(a.selected_option_id));
+      // Reject options that don't belong to the submitted question
+      let selected = a.selected_option_id;
+      if (selected && optionToQuestion.get(selected) !== a.question_id) {
+        selected = null;
+      }
+      const correctSet = correctMap.get(a.question_id)!;
+      const isCorrect = !!(selected && correctSet.has(selected));
       if (isCorrect) score++;
       answerRows.push({
         submission_id: sub.id,
         question_id: a.question_id,
-        selected_option_id: a.selected_option_id,
+        selected_option_id: selected,
         is_correct: isCorrect,
       });
     }
@@ -407,9 +496,7 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     }
 
     const submittedAt = new Date();
-    const timeTaken = Math.floor(
-      (submittedAt.getTime() - new Date(sub.started_at).getTime()) / 1000,
-    );
+    const timeTaken = Math.floor((submittedAt.getTime() - startedMs) / 1000);
 
     await supabaseAdmin
       .from("submissions")

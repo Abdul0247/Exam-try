@@ -23,12 +23,14 @@ function ExamPage() {
   const { sid } = Route.useSearch();
   const getExam = useServerFn(studentGetExam);
   const submitFn = useServerFn(studentSubmitExam);
+  const sessionToken = typeof window !== "undefined" ? sessionStorage.getItem(`exam-token-${sid}`) ?? "" : "";
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["exam", sid],
-    queryFn: () => getExam({ data: { submission_id: sid } }),
+    queryFn: () => getExam({ data: { submission_id: sid, session_token: sessionToken } }),
     retry: false,
     refetchOnWindowFocus: false,
+    enabled: !!sessionToken,
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -47,14 +49,15 @@ function ExamPage() {
         question_id: q.id,
         selected_option_id: answers[q.id] ?? null,
       }));
-      const r = await submitFn({ data: { submission_id: sid, answers: payload } });
+      const r = await submitFn({ data: { submission_id: sid, session_token: sessionToken, answers: payload } });
       setResult(r);
       setSubmitted(true);
+      sessionStorage.removeItem(`exam-token-${sid}`);
     } catch (e) {
       alert((e as Error).message);
       setSubmitting(false);
     }
-  }, [data, answers, sid, submitFn, submitted, submitting]);
+  }, [data, answers, sid, sessionToken, submitFn, submitted, submitting]);
 
   const handleTimeUp = useCallback(() => { if (!submitted) handleSubmit(); }, [submitted, handleSubmit]);
 
