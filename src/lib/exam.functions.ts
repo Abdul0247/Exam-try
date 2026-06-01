@@ -2,6 +2,8 @@
 // Student fns use the admin client because students don't sign in to Supabase.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { createHmac, timingSafeEqual } from "crypto";
+import bcrypt from "bcryptjs";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -10,6 +12,44 @@ function genCode() {
   let s = "";
   for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
   return s;
+}
+
+// ---- HMAC-signed short-lived session token bound to submission_id ----
+const SESSION_TTL_MS = 6 * 3600_000;
+function sessionSecret(): string {
+  const s = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!s) throw new Error("Server misconfigured: missing signing secret");
+  return s;
+}
+function signSession(submissionId: string): string {
+  const exp = Date.now() + SESSION_TTL_MS;
+  const payload = `${submissionId}.${exp}`;
+  const sig = createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
+}
+function verifySession(token: string | undefined, submissionId: string): boolean {
+  if (!token) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  const [sid, expStr, sig] = parts;
+  if (sid !== submissionId) return false;
+  const exp = Number(expStr);
+  if (!Number.isFinite(exp) || Date.now() > exp) return false;
+  const expected = createHmac("sha256", sessionSecret()).update(`${sid}.${expStr}`).digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function hashPin(pin: string): Promise<string> {
+  return bcrypt.hash(pin, 10);
+}
+async function verifyPin(plain: string, stored: string): Promise<boolean> {
+  if (stored.startsWith("$2")) return bcrypt.compare(plain, stored);
+  // Legacy plaintext (pre-hashing). Constant-time compare.
+  const a = Buffer.from(plain);
+  const b = Buffer.from(stored);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // ============ TEACHER ============
