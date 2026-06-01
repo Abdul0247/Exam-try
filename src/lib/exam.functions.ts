@@ -278,7 +278,14 @@ export const studentStartExam = createServerFn({ method: "POST" })
       .eq("student_number", studentNum)
       .maybeSingle();
     if (!roster) throw new Error("Student number not found in roster");
-    if (roster.pin !== pin) throw new Error("Incorrect PIN. Ask your teacher for your personal PIN.");
+    const pinOk = await verifyPin(pin, roster.pin);
+    if (!pinOk) throw new Error("Incorrect PIN. Ask your teacher for your personal PIN.");
+
+    // Opportunistically upgrade legacy plaintext PIN to bcrypt hash
+    if (!roster.pin.startsWith("$2")) {
+      const hashed = await hashPin(pin);
+      await supabaseAdmin.from("roster_students").update({ pin: hashed }).eq("id", roster.id);
+    }
 
     // Get or create submission
     let { data: submission } = await supabaseAdmin
@@ -307,7 +314,8 @@ export const studentStartExam = createServerFn({ method: "POST" })
       submission = created;
     }
 
-    return { submission_id: submission!.id, exam_id: exam.id, exam_title: exam.title };
+    const token = signSession(submission!.id);
+    return { submission_id: submission!.id, session_token: token, exam_id: exam.id, exam_title: exam.title };
   });
 
 export const studentGetExam = createServerFn({ method: "GET" })
