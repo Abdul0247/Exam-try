@@ -403,16 +403,21 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     z
       .object({
         submission_id: z.string().uuid(),
+        session_token: z.string().min(1),
         answers: z.array(
           z.object({
             question_id: z.string().uuid(),
             selected_option_id: z.string().uuid().nullable(),
           }),
-        ),
+        ).max(1000),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    if (!verifySession(data.session_token, data.submission_id)) {
+      throw new Error("Session expired. Please sign in again.");
+    }
+
     const { data: sub } = await supabaseAdmin
       .from("submissions")
       .select("*")
@@ -421,7 +426,25 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     if (!sub) throw new Error("Submission not found");
     if (sub.submitted_at) throw new Error("Already submitted");
 
-    // Load all questions+correct options for this exam (server-side only)
+    // Enforce exam status, window, and per-student time limit
+    const { data: exam } = await supabaseAdmin
+      .from("exams")
+      .select("status, closes_at, duration_minutes")
+      .eq("id", sub.exam_id)
+      .single();
+    if (!exam) throw new Error("Exam not found");
+    if (exam.status !== "active") throw new Error("Exam is no longer active");
+    const now = Date.now();
+    if (exam.closes_at && new Date(exam.closes_at).getTime() < now) {
+      throw new Error("Exam window has closed");
+    }
+    const startedMs = new Date(sub.started_at).getTime();
+    // Allow a 30s grace for clock skew / submission latency
+    if (now > startedMs + exam.duration_minutes * 60_000 + 30_000) {
+      throw new Error("Your time for this exam has expired");
+    }
+
+    // Load all questions+options for this exam (server-side only)
     const { data: questions } = await supabaseAdmin
       .from("questions")
       .select("id, options(id, is_correct)")
@@ -429,9 +452,13 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     const totalQ = questions?.length ?? 0;
 
     const correctMap = new Map<string, Set<string>>();
+    const optionToQuestion = new Map<string, string>();
     for (const q of questions ?? []) {
       const set = new Set<string>();
-      for (const o of q.options ?? []) if (o.is_correct) set.add(o.id);
+      for (const o of q.options ?? []) {
+        optionToQuestion.set(o.id, q.id);
+        if (o.is_correct) set.add(o.id);
+      }
       correctMap.set(q.id, set);
     }
 
@@ -444,15 +471,22 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     }> = [];
     const seen = new Set<string>();
     for (const a of data.answers) {
+      // Reject answers for questions not in this exam (cross-exam injection)
+      if (!correctMap.has(a.question_id)) continue;
       if (seen.has(a.question_id)) continue;
       seen.add(a.question_id);
-      const correctSet = correctMap.get(a.question_id);
-      const isCorrect = !!(a.selected_option_id && correctSet?.has(a.selected_option_id));
+      // Reject options that don't belong to the submitted question
+      let selected = a.selected_option_id;
+      if (selected && optionToQuestion.get(selected) !== a.question_id) {
+        selected = null;
+      }
+      const correctSet = correctMap.get(a.question_id)!;
+      const isCorrect = !!(selected && correctSet.has(selected));
       if (isCorrect) score++;
       answerRows.push({
         submission_id: sub.id,
         question_id: a.question_id,
-        selected_option_id: a.selected_option_id,
+        selected_option_id: selected,
         is_correct: isCorrect,
       });
     }
@@ -462,9 +496,7 @@ export const studentSubmitExam = createServerFn({ method: "POST" })
     }
 
     const submittedAt = new Date();
-    const timeTaken = Math.floor(
-      (submittedAt.getTime() - new Date(sub.started_at).getTime()) / 1000,
-    );
+    const timeTaken = Math.floor((submittedAt.getTime() - startedMs) / 1000);
 
     await supabaseAdmin
       .from("submissions")
