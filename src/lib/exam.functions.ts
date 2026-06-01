@@ -279,9 +279,10 @@ export const studentStartExam = createServerFn({ method: "POST" })
       .eq("exam_id", exam.id)
       .eq("student_number", studentNum)
       .maybeSingle();
-    if (!roster) throw new Error("Student number not found in roster");
+    if (!roster) throw new Error("Invalid student number or PIN.");
     const pinOk = await verifyPin(pin, roster.pin);
-    if (!pinOk) throw new Error("Incorrect PIN. Ask your teacher for your personal PIN.");
+    if (!pinOk) throw new Error("Invalid student number or PIN.");
+
 
     // Opportunistically upgrade legacy plaintext PIN to bcrypt hash
     if (!roster.pin.startsWith("$2")) {
