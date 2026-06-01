@@ -89,8 +89,9 @@ const CreateExamInput = z.object({
 });
 
 function genPin() {
-  return String(Math.floor(1000 + Math.random() * 9000));
+  return String(randomInt(1000, 10000));
 }
+
 
 export const createExam = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
