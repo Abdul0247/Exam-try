@@ -319,8 +319,13 @@ export const studentStartExam = createServerFn({ method: "POST" })
   });
 
 export const studentGetExam = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => z.object({ submission_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: unknown) =>
+    z.object({ submission_id: z.string().uuid(), session_token: z.string().min(1) }).parse(d),
+  )
   .handler(async ({ data }) => {
+    if (!verifySession(data.session_token, data.submission_id)) {
+      throw new Error("Session expired. Please sign in again.");
+    }
     const { data: sub } = await supabaseAdmin
       .from("submissions")
       .select("*")
