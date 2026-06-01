@@ -158,12 +158,14 @@ export const createExam = createServerFn({ method: "POST" })
         student_number: r.student_number,
         pin: (r.pin && r.pin.trim()) || genPin(),
       }));
-      const rows = rosterWithPins.map((r) => ({
-        exam_id: exam.id,
-        full_name: r.full_name,
-        student_number: r.student_number,
-        pin: r.pin,
-      }));
+      const rows = await Promise.all(
+        rosterWithPins.map(async (r) => ({
+          exam_id: exam.id,
+          full_name: r.full_name,
+          student_number: r.student_number,
+          pin: await hashPin(r.pin),
+        })),
+      );
       const { error: rErr } = await supabase.from("roster_students").insert(rows);
       if (rErr) throw new Error(rErr.message);
     }
