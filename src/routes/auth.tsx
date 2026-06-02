@@ -50,7 +50,7 @@ function AuthPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -59,8 +59,15 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        toast.success("Account created. You're signed in.");
-        navigate({ to: "/dashboard" });
+        if (data.session) {
+          toast.success("Account created. You're signed in.");
+          navigate({ to: "/dashboard" });
+          return;
+        }
+        toast.success("Check your email to verify your account before signing in.");
+        setMode("signin");
+        setPassword("");
+        setConfirm("");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
