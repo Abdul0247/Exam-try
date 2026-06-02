@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,26 @@ const rules = [
   { label: "One number", test: (p: string) => /\d/.test(p) },
   { label: "One special character", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
 ];
+
+async function ensureTeacherProfile(user: User) {
+  const { data: existing, error: lookupError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (lookupError) throw lookupError;
+  if (existing) return;
+
+  const { error } = await supabase.from("profiles").insert({
+    id: user.id,
+    email: user.email ?? null,
+    full_name: typeof user.user_metadata.full_name === "string" ? user.user_metadata.full_name : null,
+    school_name: typeof user.user_metadata.school_name === "string" ? user.user_metadata.school_name : null,
+  });
+
+  if (error) throw error;
+}
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -60,17 +81,19 @@ function AuthPage() {
         });
         if (error) throw error;
         if (data.session) {
+          await ensureTeacherProfile(data.user);
           toast.success("Account created. You're signed in.");
           navigate({ to: "/dashboard" });
           return;
         }
-        toast.success("Check your email to verify your account before signing in.");
+        toast.success("Verification email sent. Check your inbox before signing in.");
         setMode("signin");
         setPassword("");
         setConfirm("");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (data.user) await ensureTeacherProfile(data.user);
         navigate({ to: "/dashboard" });
       }
     } catch (err) {
