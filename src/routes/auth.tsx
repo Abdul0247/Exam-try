@@ -80,7 +80,7 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        if (data.session) {
+        if (data.session && data.user) {
           await ensureTeacherProfile(data.user);
           toast.success("Account created. You're signed in.");
           navigate({ to: "/dashboard" });
